@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#Install zabbix agentd
+#author by djshi2
+
+ip=$1
+sip=$2
+
+checkos(){
+! uname -a | grep "centos7" > /dev/null && echo "error: Your operating system is not CentOS7 on $ip" && exit 1
+}
+
+setfirewalld(){
+[ "`getenforce`" != "Disabled" ] && setenforce 0 && sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+! systemctl status firewalld | grep "dead" > /dev/null && systemctl stop firewalld && systemctl disable firewalld
+}
+
+zabbix_agentd(){
+rpm -ivh http://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-release-3.4-2.el7.noarch.rpm && yum install -y zabbix-agent
+! rpm -qa|grep "zabbix-agent" > /dev/null && echo "error: Installation of zabbix_agent failed on $ip" && eixt 1
+
+sed -i "s/Server=127.0.0.1/Server=$sip/g" /etc/zabbix/zabbix_agentd.conf && sed -i "s/ServerActive=127.0.0.1/ServerActive=$sip/g" /etc/zabbix/zabbix_agentd.conf
+a=`echo $ip | awk -F '.' '{print $NF}'`
+sed -i "s/Hostname=Zabbix server/Hostname=Zabbix_agent_$a/g" /etc/zabbix/zabbix_agentd.conf 
+
+systemctl start zabbix-agent && systemctl enable zabbix-agent
+! systemctl status zabbix-agent | grep "active (running)" > /dev/null && echo "error: Failed to start zabbix-agent on $ip" && exit 1
+}
+
+checkos
+setfirewalld
+zabbix_agentd
